@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORCA-bench: How Ready Are Language Model Agents for Oncall?</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#fbfaf7;
+    --surface:#ffffff;
+    --ink:#1c1b19;
+    --muted:#605c54;
+    --line:#e7e3da;
+    --accent:#9a342d;       /* terracotta */
+    --accent-soft:#f3e4e1;
+    --blue:#2f5d7c;
+    --gold:#b9892f;
+    --green:#4a7c59;
+    --shadow:0 1px 2px rgba(28,27,25,.05),0 8px 24px rgba(28,27,25,.05);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:0 24px}
+
+  /* Header */
+  header{
+    text-align:center;padding:72px 24px 40px;
+    border-bottom:1px solid var(--line);
+    background:
+      radial-gradient(1200px 360px at 50% -120px, var(--accent-soft), transparent 70%);
+  }
+  .eyebrow{
+    font-family:var(--mono);font-size:.74rem;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:18px;
+  }
+  h1{
+    font-family:var(--serif);font-weight:600;
+    font-size:clamp(2rem,5vw,3rem);line-height:1.12;
+    margin:0 auto 10px;max-width:18ch;
+  }
+  .subtitle{
+    font-family:var(--serif);font-style:italic;color:var(--muted);
+    font-size:clamp(1.05rem,2.4vw,1.3rem);margin:0 auto 26px;max-width:40ch;
+  }
+  .authors{color:var(--muted);font-size:.95rem;margin-bottom:6px}
+  .venue{font-family:var(--mono);font-size:.78rem;color:var(--gold);letter-spacing:.06em}
+  .btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:28px}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:.92rem;font-weight:500;text-decoration:none;
+    padding:10px 18px;border-radius:8px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);transition:.16s;
+    box-shadow:var(--shadow);
+  }
+  .btn:hover{transform:translateY(-1px);border-color:var(--accent)}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn svg{width:16px;height:16px}
+
+  /* Sections */
+  section{padding:52px 0}
+  section + section{border-top:1px solid var(--line)}
+  h2{
+    font-family:var(--serif);font-weight:600;font-size:1.7rem;
+    margin:0 0 6px;
+  }
+  .lede{color:var(--muted);margin:0 0 28px;font-size:1.02rem}
+  p{margin:0 0 18px}
+
+  /* TL;DR callout */
+  .tldr{
+    background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);
+    border-radius:10px;padding:22px 24px;box-shadow:var(--shadow);
+  }
+  .tldr h3{margin:0 0 10px;font-family:var(--serif);font-size:1.15rem}
+  .tldr ul{margin:0;padding-left:20px}
+  .tldr li{margin-bottom:8px}
+  .tldr strong{color:var(--accent)}
+
+  /* Stat cards */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:8px}
+  .stat{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:20px 16px;text-align:center;box-shadow:var(--shadow);
+  }
+  .stat .num{font-family:var(--serif);font-size:2rem;font-weight:600;color:var(--accent);line-height:1}
+  .stat .lbl{font-size:.82rem;color:var(--muted);margin-top:8px;line-height:1.35}
+  @media(max-width:680px){.stats{grid-template-columns:repeat(2,1fr)}}
+
+  /* Chart card */
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    padding:24px;box-shadow:var(--shadow);margin-bottom:24px;
+  }
+  .card h3{margin:0 0 4px;font-family:var(--serif);font-size:1.15rem}
+  .card .cap{font-size:.86rem;color:var(--muted);margin:0 0 18px}
+  .chart-box{position:relative;height:340px}
+  .chart-box.tall{height:380px}
+
+  .toggle{display:inline-flex;gap:4px;background:var(--bg);border:1px solid var(--line);
+    border-radius:8px;padding:4px;margin-bottom:16px}
+  .toggle button{
+    font-family:var(--sans);font-size:.82rem;border:none;background:transparent;
+    color:var(--muted);padding:6px 14px;border-radius:6px;cursor:pointer;transition:.15s;
+  }
+  .toggle button.active{background:var(--accent);color:#fff}
+
+  /* Table */
+  .table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;background:var(--surface)}
+  th,td{padding:11px 14px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{background:#f6f3ee;font-weight:600;color:var(--ink);position:sticky;top:0}
+  thead th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+  thead th.sortable:hover{background:#efe9e0}
+  thead th .arr{color:var(--muted);font-size:.75em;margin-left:3px;opacity:.45}
+  thead th.sort-active{color:var(--accent)}
+  thead th.sort-active .arr{color:var(--accent);opacity:1}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#faf7f2}
+  td.best{color:var(--accent);font-weight:600}
+  .model{font-weight:500}
+  .err{color:var(--muted);font-size:.82em}
+
+  /* Methods grid */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:680px){.grid3{grid-template-columns:1fr}}
+  .feature{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:var(--shadow)}
+  .feature .ic{font-size:1.4rem;margin-bottom:8px}
+  .feature h4{margin:0 0 6px;font-family:var(--serif);font-size:1.05rem}
+  .feature p{margin:0;font-size:.9rem;color:var(--muted)}
+
+  /* Citation */
+  .cite{background:#1c1b19;color:#e9e5dc;border-radius:12px;padding:20px 22px;
+    font-family:var(--mono);font-size:.82rem;line-height:1.6;overflow-x:auto;position:relative}
+  .cite button{position:absolute;top:12px;right:12px;background:#33312d;color:#e9e5dc;
+    border:none;border-radius:6px;padding:6px 12px;font-size:.76rem;cursor:pointer;font-family:var(--sans)}
+  .cite button:hover{background:var(--accent)}
+
+  /* Code block */
+  .codeblock{background:#1c1b19;border-radius:12px;padding:20px 22px 22px;position:relative;overflow-x:auto;box-shadow:var(--shadow)}
+  .codeblock pre{margin:0;font-family:var(--mono);font-size:.82rem;line-height:1.7;color:#e9e5dc;white-space:pre}
+  .codeblock .cmt{color:#8a857a}
+  .codeblock .var{color:#d8b3ae}
+  .codeblock .cmd{color:#e8c785}
+  .codeblock button{position:absolute;top:12px;right:12px;background:#33312d;color:#e9e5dc;
+    border:none;border-radius:6px;padding:6px 12px;font-size:.76rem;cursor:pointer;font-family:var(--sans)}
+  .codeblock button:hover{background:var(--accent)}
+  .req{font-size:.86rem;color:var(--muted);margin:0 0 16px}
+  .req code{background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:.85em}
+
+  /* Metric glossary tooltips */
+  .metric{
+    border-bottom:1px dotted var(--accent);cursor:help;
+  }
+  th .metric{border-bottom-color:currentColor}
+  #tip{
+    position:fixed;z-index:1000;max-width:300px;
+    background:#1c1b19;color:#f1ede4;font-family:var(--sans);
+    font-size:.82rem;line-height:1.5;font-weight:400;
+    padding:11px 14px;border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,.25);
+    opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s;
+    pointer-events:none;text-align:left;
+  }
+  #tip.show{opacity:1;transform:translateY(0)}
+  #tip .tip-name{font-weight:600;color:#e8c785;display:block;margin-bottom:3px}
+  #tip .tip-src{display:block;margin-top:6px;color:#8a857a;font-size:.74rem;font-family:var(--mono)}
+
+  footer{padding:40px 24px 60px;text-align:center;color:var(--muted);font-size:.85rem;border-top:1px solid var(--line)}
+  .disclaimer{font-size:.78rem;color:var(--muted);font-style:italic;margin-top:18px}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Benchmark &middot; SRE Root Cause Analysis</div>
+  <h1>How Ready Are Language Model Agents for Oncall?</h1>
+  <p class="subtitle">ORCA-bench: putting general-purpose coding agents in a production-fidelity oncall setting.</p>
+  <div class="authors">A benchmark on the OpenTelemetry Astronomy Shop demo system</div>
+  <div class="venue">ICLR 2026 Submission</div>
+  <div class="btns">
+    <a class="btn primary" href="#" onclick="return false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+      Paper
+    </a>
+    <a class="btn" href="https://hub.harborframework.com/datasets/orca-bench/ORCA-bench/latest">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      Dataset
+    </a>
+    <a class="btn" href="https://github.com/ORCA-bench/ORCA-bench">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+      Code
+    </a>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- Getting Started -->
+  <section id="getting-started">
+    <h2>Getting started</h2>
+    <p class="req">Stage the snapshot's <code>/app/</code> into a host-side cache keyed by image id, then bind-mount it read-only into every trial. Requires <code>docker</code> and the <code>harbor</code> CLI.</p>
+    <div class="codeblock">
+      <button onclick="copyCode(this)">Copy</button>
+<pre id="quickstart"><span class="cmt"># Stage the snapshot's /app/ to a host-side cache keyed by image id.</span>
+<span class="var">SNAPSHOT_IMAGE</span>=orcabench/sre-otel-snapshot:data-0418-harbor-template
+<span class="cmd">docker</span> pull <span class="var">"$SNAPSHOT_IMAGE"</span>
+<span class="var">CACHE_DIR</span>=<span class="var">"$HOME/.cache/sre-snapshot-cache/$(</span><span class="cmd">docker</span> image inspect <span class="var">"$SNAPSHOT_IMAGE"</span> -f '{{.Id}}' | cut -d: -f2 | cut -c1-12<span class="var">)"</span>
+[ -z <span class="var">"$(ls -A "$CACHE_DIR" 2>/dev/null)"</span> ] &amp;&amp; { mkdir -p <span class="var">"$CACHE_DIR"</span>; <span class="var">CID</span>=<span class="var">$(</span><span class="cmd">docker</span> create <span class="var">"$SNAPSHOT_IMAGE"</span><span class="var">)</span>; <span class="cmd">docker</span> cp <span class="var">"$CID:/app/."</span> <span class="var">"$CACHE_DIR/"</span>; <span class="cmd">docker</span> rm <span class="var">"$CID"</span>; }
+
+<span class="cmt"># Bind-mount the cache (read-only) into every trial at the same host path</span>
+<span class="cmt"># (target=source, so the entrypoint can `cp -al` without translating it).</span>
+<span class="var">SNAPSHOT_CACHE_HOST_DIR</span>=<span class="var">"$CACHE_DIR"</span> <span class="cmd">harbor</span> run \
+    --mounts-json <span class="var">"[{\"type\":\"bind\",\"source\":\"$CACHE_DIR\",\"target\":\"$CACHE_DIR\",\"read_only\":true}]"</span> \
+    -d orca-bench/ORCA-bench</pre>
+    </div>
+  </section>
+
+  <!-- TL;DR -->
+  <section id="tldr">
+    <div class="tldr">
+      <h3>TL;DR</h3>
+      <ul>
+        <li>We pair a live OpenTelemetry-instrumented microservice system &mdash; six days of metrics, logs, and traces plus full source-code access &mdash; with <strong>1,079 root-cause-analysis tasks</strong>.</li>
+        <li>Across five frontier agents, the best <span class="metric" data-def="acc">RCA accuracy</span> is just <strong>25.3%</strong> on realistic Medium-difficulty tasks and <strong>10.0%</strong> on Hard.</li>
+        <li>The weakest model <span class="metric" data-def="hall"><strong>hallucinates</strong></span> an implausible root cause in roughly <strong>40%</strong> of incident reports.</li>
+        <li>Removing source-code access <strong>degrades every metric</strong> &mdash; code is not optional context.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Abstract -->
+  <section id="abstract">
+    <h2>The problem</h2>
+    <p>Large language models can write, patch, and search code, but oncall root cause analysis (RCA) demands something different: reasoning over noisy metrics, logs, traces, and source code, starting from ambiguous user-facing reports, often hours after the incident began.</p>
+    <p>ORCA-bench puts general-purpose coding agents in a production-fidelity oncall setting. It pairs a live, OpenTelemetry-instrumented microservice system &mdash; exposing six days of telemetry through real interfaces (Prometheus, Jaeger, and OpenSearch via Grafana) and full source-code access &mdash; with 1,079 RCA tasks that systematically vary report specificity, time-to-detection, and co-occurring fault scenarios. Ground-truth symptoms are curated and signed off by expert SREs, and our LLM-as-judge is independently re-scored by humans (Cohen's &kappa;<sub>w</sub> = 0.88).</p>
+    <div class="stats">
+      <div class="stat"><div class="num">1,079</div><div class="lbl">RCA tasks</div></div>
+      <div class="stat"><div class="num">6 days</div><div class="lbl">of live telemetry</div></div>
+      <div class="stat"><div class="num">50 GB</div><div class="lbl">curated testbed</div></div>
+      <div class="stat"><div class="num">0.88</div><div class="lbl">judge&ndash;human &kappa;<sub>w</sub></div></div>
+    </div>
+  </section>
+
+  <!-- Headline result chart -->
+  <section id="results">
+    <h2>Headline results</h2>
+    <p class="lede"><span class="metric" data-def="acc">RCA accuracy</span> and the <span class="metric" data-def="depth">depth</span> of investigation across five frontier agents, with access to both code and telemetry (incident tasks, N=884).</p>
+
+    <div class="card">
+      <h3><span class="metric" data-def="acc">RCA Accuracy</span> vs. <span class="metric" data-def="depth">RCA Depth</span></h3>
+      <p class="cap">Mean &plusmn; 1 SE in percent. Even the strongest agents correctly identify the root cause in fewer than a third of incidents.</p>
+      <div class="chart-box"><canvas id="chMain"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h3>Accuracy falls off a cliff as tasks get harder</h3>
+      <p class="cap"><span class="metric" data-def="acc">RCA accuracy</span> stratified by prompt difficulty. Harder tasks have more ground-truth events and vaguer reports &mdash; the realistic regime.</p>
+      <div class="chart-box"><canvas id="chDiff"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h3><span class="metric" data-def="hall">Hallucination</span>: implausible root causes</h3>
+      <p class="cap">Share of incident reports asserting a root cause inconsistent with the evidence. Lower is better.</p>
+      <div class="chart-box"><canvas id="chHall"></canvas></div>
+    </div>
+  </section>
+
+  <!-- Code access ablation -->
+  <section id="ablation">
+    <h2>Source code is not optional</h2>
+    <p class="lede">Removing codebase access &mdash; leaving agents with telemetry only &mdash; degrades every metric for every model.</p>
+    <div class="card">
+      <div class="toggle" id="ablToggle">
+        <button class="active" data-m="acc"><span class="metric" data-def="acc">RCA Accuracy</span></button>
+        <button data-m="depth"><span class="metric" data-def="depth">RCA Depth</span></button>
+        <button data-m="hall"><span class="metric" data-def="hall">Hallucination</span></button>
+      </div>
+      <div class="chart-box"><canvas id="chAbl"></canvas></div>
+    </div>
+  </section>
+
+  <!-- Full table -->
+  <section id="table">
+    <h2>Full results table</h2>
+    <p class="lede">Incident tasks (N=884), code + telemetry access. All values mean &plusmn; 1 SE in percent; judge is GPT-5.4. Best value in each column highlighted. <strong>Click any column header to sort.</strong></p>
+    <div class="table-scroll">
+      <table id="resTable">
+        <thead>
+          <tr>
+            <th class="sortable" data-key="m">Model<span class="arr">↕</span></th>
+            <th class="sortable" data-key="depth"><span class="metric" data-def="depth">RCA Depth</span><span class="arr">↕</span></th>
+            <th class="sortable" data-key="acc"><span class="metric" data-def="acc">RCA Accuracy</span><span class="arr">↕</span></th>
+            <th class="sortable" data-key="hall"><span class="metric" data-def="hall">Hallucination</span><span class="arr">↕</span></th>
+            <th class="sortable" data-key="mech"><span class="metric" data-def="mech">Mechanism</span><span class="arr">↕</span></th>
+            <th class="sortable" data-key="inc"><span class="metric" data-def="inc">Inc. Time</span><span class="arr">↕</span></th>
+            <th class="sortable" data-key="metrics"><span class="metric" data-def="metrics">Metrics (any)</span><span class="arr">↕</span></th>
+            <th class="sortable" data-key="logs"><span class="metric" data-def="logs">Logs (any)</span><span class="arr">↕</span></th>
+            <th class="sortable" data-key="traces"><span class="metric" data-def="traces">Traces (any)</span><span class="arr">↕</span></th>
+          </tr>
+        </thead>
+        <tbody><!-- filled by JS --></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Methods -->
+  <section id="how">
+    <h2>How the benchmark works</h2>
+    <div class="grid3">
+      <div class="feature"><div class="ic">📡</div><h4>Real telemetry</h4><p>Agents query live Prometheus, Jaeger, and OpenSearch through Grafana &mdash; the same interfaces a human oncall engineer uses.</p></div>
+      <div class="feature"><div class="ic">🧩</div><h4>Varied difficulty</h4><p>Tasks systematically vary report specificity, time-to-detection, and co-occurring faults across Easy, Medium, and Hard.</p></div>
+      <div class="feature"><div class="ic">✅</div><h4>Expert ground truth</h4><p>Symptoms are curated and signed off by expert SREs; the LLM judge is validated against human scores at &kappa;<sub>w</sub>=0.88.</p></div>
+    </div>
+    <p class="disclaimer">These results come from a curated 50&nbsp;GB / six-day testbed with tasks investigated in isolation, on a system whose code and instrumentation are public. Real production systems are orders of magnitude larger, more dynamic, and more idiosyncratic &mdash; so the gap reported here is a <em>lower bound</em> on the engineering investment required before frontier coding agents can be safely entrusted with production reliability.</p>
+  </section>
+
+  <!-- Citation -->
+  <section id="cite-sec">
+    <h2>Citation</h2>
+    <div class="cite">
+      <button onclick="copyCite(this)">Copy</button>
+<pre id="bib" style="margin:0;white-space:pre-wrap">@inproceedings{orcabench2026,
+  title     = {ORCA-bench: How Ready Are Language Model Agents for Oncall?},
+  author    = {Anonymous},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2026},
+  url       = {https://hub.harborframework.com/datasets/orca-bench/ORCA-bench}
+}</pre>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  ORCA-bench &middot; Built on the OpenTelemetry Astronomy Shop demo system &middot; ICLR 2026
+</footer>
+
+<div id="tip" role="tooltip"></div>
+
+<script>
+// ---- Metric glossary (Sec. 4 evaluation + full_results appendix) ----
+const GLOSSARY = {
+  acc:{name:"RCA Accuracy",
+    def:"Fraction of tasks for which the agent named <em>every</em> listed plausible root-cause feature flag. The strictest outcome metric.",
+    src:"Sec. 4 (M1)"},
+  depth:{name:"RCA Depth",
+    def:"Mean per-rubric score on a 0–3 scale (0 = misses the cause, 1 = confirms symptoms, 2 = progresses beyond symptoms, 3 = nails the cause), averaged across rubrics and tasks, reported as % of the maximum (3).",
+    src:"Sec. 4 (M2)"},
+  hall:{name:"Hallucination Rate",
+    def:"Fraction of non-empty reports that named a root cause matching <em>none</em> of the listed plausible feature flags. Lower is better.",
+    src:"Sec. 4 (M3)"},
+  mech:{name:"Mechanism",
+    def:"Did the report correctly explain how the rubric's feature flag propagates to the user-visible failure — a causal chain from flag to symptom? Rolled up as any-match across rubrics.",
+    src:"App. Full Results"},
+  inc:{name:"Incident Time",
+    def:"Did the report place the incident start within ±10 minutes of the rubric's ground-truth incident time?",
+    src:"App. Full Results"},
+  metrics:{name:"Metrics citation",
+    def:"Did the report cite a query targeting the cluster's metric family under a Why-step whose causal chain aligns with the rubric? <b>(any)</b> = matched ≥1 cluster; <b>(all)</b> = matched every cluster.",
+    src:"App. Full Results"},
+  logs:{name:"Logs citation",
+    def:"Did the report cite log evidence whose body matches the cluster's representative body <em>and</em> attribute it to the cluster's OTel service? Both must hold. <b>(any)</b> = ≥1 cluster; <b>(all)</b> = every cluster.",
+    src:"App. Full Results"},
+  traces:{name:"Traces citation",
+    def:"Did the report cite evidence matching the cluster's service-level call chain <em>and</em> at least one smoking-gun message? Both must hold. <b>(any)</b> = ≥1 cluster; <b>(all)</b> = every cluster.",
+    src:"App. Full Results"}
+};
+
+(function(){
+  const tip=document.getElementById('tip');
+  let active=null;
+  function show(el){
+    const g=GLOSSARY[el.dataset.def]; if(!g) return;
+    tip.innerHTML=`<span class="tip-name">${g.name}</span>${g.def}<span class="tip-src">${g.src}</span>`;
+    tip.classList.add('show'); active=el; position(el);
+  }
+  function position(el){
+    const r=el.getBoundingClientRect();
+    tip.style.left='-9999px'; // measure
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    let x=r.left + r.width/2 - tw/2;
+    x=Math.max(10,Math.min(x,window.innerWidth-tw-10));
+    let y=r.top - th - 9;
+    if(y<8) y=r.bottom+9; // flip below if no room above
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  }
+  function hide(){ tip.classList.remove('show'); active=null; }
+  function bind(){
+    document.querySelectorAll('.metric[data-def]').forEach(el=>{
+      if(el._tb) return; el._tb=1;
+      el.addEventListener('mouseenter',()=>show(el));
+      el.addEventListener('mouseleave',hide);
+      el.addEventListener('focus',()=>show(el));
+      el.addEventListener('blur',hide);
+      el.setAttribute('tabindex','0');
+    });
+  }
+  window.addEventListener('scroll',()=>{ if(active) position(active); },true);
+  // expose so dynamically-rendered cells/headers can rebind
+  window.bindMetricTips=bind;
+  bind();
+})();
+
+// ---- Data (from full_results.tex) ----
+const MODELS = ["Claude Opus 4.7","Claude Sonnet 4.6","GPT-5.5","DeepSeek-V4-Pro","GLM-5"];
+const COLORS = ["#9a342d","#2f5d7c","#b9892f","#4a7c59","#7a6f9c"];
+
+// Code + telemetry, incident tasks (N=884)
+const rows = [
+  {m:"Claude Opus 4.7",  depth:48.5,acc:28.6,hall:12.6,mech:79.0,inc:82.6,metrics:65.3,logs:51.4,traces:48.4,
+    de:1.1,ae:1.5,he:1.1,mee:1.4,ie:1.3,mte:1.7,le:1.8,te:1.8},
+  {m:"Claude Sonnet 4.6",depth:46.7,acc:30.9,hall:14.8,mech:77.1,inc:80.3,metrics:53.3,logs:61.2,traces:38.0,
+    de:1.1,ae:1.6,he:1.2,mee:1.4,ie:1.3,mte:1.8,le:1.8,te:1.8},
+  {m:"GPT-5.5",          depth:48.8,acc:24.3,hall:25.0,mech:72.4,inc:79.8,metrics:73.2,logs:64.9,traces:56.7,
+    de:1.1,ae:1.4,he:1.5,mee:1.5,ie:1.4,mte:1.6,le:1.7,te:1.8},
+  {m:"DeepSeek-V4-Pro",  depth:19.7,acc:15.0,hall:7.2, mech:32.7,inc:31.1,metrics:18.1,logs:21.0,traces:5.6,
+    de:1.0,ae:1.2,he:0.9,mee:1.6,ie:1.6,mte:1.4,le:1.5,te:0.8},
+  {m:"GLM-5",            depth:27.7,acc:17.6,hall:40.2,mech:46.3,inc:54.3,metrics:14.1,logs:38.3,traces:7.3,
+    de:1.0,ae:1.3,he:1.6,mee:1.7,ie:1.7,mte:1.3,le:1.7,te:0.9}
+];
+
+// Accuracy by difficulty (Easy/Medium/Hard) per model
+const diff = {
+  "Claude Opus 4.7":  {easy:51.0,med:24.7,hard:10.0},
+  "Claude Sonnet 4.6":{easy:58.7,med:25.3,hard:8.6},
+  "GPT-5.5":          {easy:38.9,med:25.0,hard:8.6},
+  "DeepSeek-V4-Pro":  {easy:24.7,med:14.9,hard:5.4},
+  "GLM-5":            {easy:34.7,med:16.8,hard:1.1}
+};
+
+// Telemetry-only, incident tasks (N=884)
+const telOnly = {
+  "Claude Opus 4.7":  {acc:19.3,depth:38.4,hall:31.3},
+  "Claude Sonnet 4.6":{acc:21.4,depth:33.4,hall:29.0},
+  "GPT-5.5":          {acc:8.6, depth:34.2,hall:56.0},
+  "DeepSeek-V4-Pro":  {acc:5.1, depth:8.3, hall:13.0},
+  "GLM-5":            {acc:6.8, depth:14.1,hall:73.1}
+};
+const codeTel = {
+  "Claude Opus 4.7":  {acc:28.6,depth:48.5,hall:12.6},
+  "Claude Sonnet 4.6":{acc:30.9,depth:46.7,hall:14.8},
+  "GPT-5.5":          {acc:24.3,depth:48.8,hall:25.0},
+  "DeepSeek-V4-Pro":  {acc:15.0,depth:19.7,hall:7.2},
+  "GLM-5":            {acc:17.6,depth:27.7,hall:40.2}
+};
+
+// ---- Chart.js shared config ----
+Chart.defaults.font.family = getComputedStyle(document.body).getPropertyValue('--sans');
+Chart.defaults.font.size = 12;
+Chart.defaults.color = '#605c54';
+const GRID = '#e7e3da';
+const pct = v => v + '%';
+
+// 1) Main: accuracy + depth grouped bars
+new Chart(document.getElementById('chMain'),{
+  type:'bar',
+  data:{labels:MODELS,datasets:[
+    {label:'RCA Accuracy',data:rows.map(r=>r.acc),backgroundColor:'#9a342d',borderRadius:4},
+    {label:'RCA Depth',data:rows.map(r=>r.depth),backgroundColor:'#d8b3ae',borderRadius:4}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'%'}}},
+    scales:{y:{beginAtZero:true,max:60,grid:{color:GRID},ticks:{callback:pct}},x:{grid:{display:false}}}}
+});
+
+// 2) Difficulty lines
+new Chart(document.getElementById('chDiff'),{
+  type:'line',
+  data:{labels:['Easy','Medium','Hard'],
+    datasets:MODELS.map((m,i)=>({
+      label:m,data:[diff[m].easy,diff[m].med,diff[m].hard],
+      borderColor:COLORS[i],backgroundColor:COLORS[i],tension:.3,
+      borderWidth:2.4,pointRadius:4,pointHoverRadius:6
+    }))},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'%'}}},
+    scales:{y:{beginAtZero:true,max:65,grid:{color:GRID},ticks:{callback:pct}},x:{grid:{display:false}}}}
+});
+
+// 3) Hallucination bars (sorted asc)
+const hallSorted = [...rows].sort((a,b)=>a.hall-b.hall);
+new Chart(document.getElementById('chHall'),{
+  type:'bar',
+  data:{labels:hallSorted.map(r=>r.m),datasets:[
+    {label:'% Hallucination',data:hallSorted.map(r=>r.hall),
+     backgroundColor:hallSorted.map(r=>r.hall>30?'#9a342d':r.hall>15?'#b9892f':'#4a7c59'),borderRadius:4}
+  ]},
+  options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.x+'%'}}},
+    scales:{x:{beginAtZero:true,max:50,grid:{color:GRID},ticks:{callback:pct}},y:{grid:{display:false}}}}
+});
+
+// 4) Ablation grouped bars w/ toggle
+let ablChart;
+function drawAbl(metric){
+  const ct = MODELS.map(m=>codeTel[m][metric]);
+  const to = MODELS.map(m=>telOnly[m][metric]);
+  const max = Math.max(...ct,...to)*1.15;
+  if(ablChart) ablChart.destroy();
+  ablChart = new Chart(document.getElementById('chAbl'),{
+    type:'bar',
+    data:{labels:MODELS,datasets:[
+      {label:'Code + Telemetry',data:ct,backgroundColor:'#2f5d7c',borderRadius:4},
+      {label:'Telemetry only',data:to,backgroundColor:'#bcd0dd',borderRadius:4}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'%'}}},
+      scales:{y:{beginAtZero:true,max:max,grid:{color:GRID},ticks:{callback:pct}},x:{grid:{display:false}}}}
+  });
+}
+drawAbl('acc');
+document.querySelectorAll('#ablToggle button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#ablToggle button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    drawAbl(b.dataset.m);
+  };
+});
+
+// 5) Table
+const cols=['depth','acc','hall','mech','inc','metrics','logs','traces'];
+const errMap={depth:'de',acc:'ae',hall:'he',mech:'mee',inc:'ie',metrics:'mte',logs:'le',traces:'te'};
+// best = max except hall(min)
+const best={};
+cols.forEach(c=>{
+  best[c]= c==='hall' ? Math.min(...rows.map(r=>r[c])) : Math.max(...rows.map(r=>r[c]));
+});
+const tb=document.querySelector('#resTable tbody');
+let sortKey=null, sortDir=1; // 1 asc, -1 desc
+
+function renderRows(){
+  let data=[...rows];
+  if(sortKey){
+    data.sort((a,b)=>{
+      if(sortKey==='m') return a.m.localeCompare(b.m)*sortDir;
+      return (a[sortKey]-b[sortKey])*sortDir;
+    });
+  }
+  tb.innerHTML='';
+  data.forEach(r=>{
+    let html=`<tr><td class="model">${r.m}</td>`;
+    cols.forEach(c=>{
+      const isBest = r[c]===best[c];
+      html+=`<td class="${isBest?'best':''}">${r[c].toFixed(1)}<span class="err"> &plusmn;${r[errMap[c]].toFixed(1)}</span></td>`;
+    });
+    html+='</tr>';
+    tb.insertAdjacentHTML('beforeend',html);
+  });
+  // header indicators
+  document.querySelectorAll('#resTable thead th').forEach(th=>{
+    const k=th.dataset.key, a=th.querySelector('.arr');
+    if(k===sortKey){th.classList.add('sort-active');a.textContent=sortDir===1?'↑':'↓';}
+    else{th.classList.remove('sort-active');a.textContent='↕';}
+  });
+}
+
+document.querySelectorAll('#resTable thead th.sortable').forEach(th=>{
+  th.onclick=()=>{
+    const k=th.dataset.key;
+    if(sortKey===k){ sortDir*=-1; }
+    else {
+      sortKey=k;
+      // numeric: default high-to-low (best first), except hallucination & model
+      sortDir = (k==='m'||k==='hall') ? 1 : -1;
+    }
+    renderRows();
+  };
+});
+
+renderRows();
+
+// Quickstart copy
+function copyCode(btn){
+  navigator.clipboard.writeText(document.getElementById('quickstart').innerText).then(()=>{
+    const t=btn.textContent;btn.textContent='Copied!';setTimeout(()=>btn.textContent=t,1500);
+  });
+}
+
+// Citation copy
+function copyCite(btn){
+  navigator.clipboard.writeText(document.getElementById('bib').innerText).then(()=>{
+    const t=btn.textContent;btn.textContent='Copied!';setTimeout(()=>btn.textContent=t,1500);
+  });
+}
+</script>
+</body>
+</html>
