@@ -53,7 +53,10 @@
     font-family:var(--serif);font-style:italic;color:var(--muted);
     font-size:clamp(1.05rem,2.4vw,1.3rem);margin:0 auto 26px;max-width:40ch;
   }
-  .authors{color:var(--muted);font-size:.95rem;margin-bottom:6px}
+  .authors{color:var(--ink);font-size:1rem;margin-bottom:4px;line-height:1.6}
+  .authors sup{color:var(--accent);font-size:.7em}
+  .affils{color:var(--muted);font-size:.85rem;margin-bottom:8px}
+  .affils sup{color:var(--accent);font-size:.85em}
   .venue{font-family:var(--mono);font-size:.78rem;color:var(--gold);letter-spacing:.06em}
   .btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:28px}
   .btn{
@@ -189,7 +192,10 @@
   <div class="eyebrow">Benchmark &middot; SRE Root Cause Analysis</div>
   <h1>How Ready Are Language Model Agents for Oncall?</h1>
   <p class="subtitle">ORCA-bench: putting general-purpose coding agents in a production-fidelity oncall setting.</p>
-  <div class="authors">A benchmark on the OpenTelemetry Astronomy Shop demo system</div>
+  <div class="authors">
+    Albert Gong<sup>1</sup>, Kyuseong Choi<sup>1</sup>, Abhineet Agarwal<sup>2</sup>, Anish Agarwal<sup>3</sup>, Raaz Dwivedi<sup>1</sup>
+  </div>
+  <div class="affils"><sup>1</sup>Cornell Tech &nbsp;&middot;&nbsp; <sup>2</sup>Traversal &nbsp;&middot;&nbsp; <sup>3</sup>Columbia University</div>
   <div class="venue">ICLR 2026 Submission</div>
   <div class="btns">
     <a class="btn primary" href="#" onclick="return false">
@@ -351,7 +357,7 @@
       <button onclick="copyCite(this)">Copy</button>
 <pre id="bib" style="margin:0;white-space:pre-wrap">@inproceedings{orcabench2026,
   title     = {ORCA-bench: How Ready Are Language Model Agents for Oncall?},
-  author    = {Anonymous},
+  author    = {Gong, Albert and Choi, Kyuseong and Agarwal, Abhineet and Agarwal, Anish and Dwivedi, Raaz},
   booktitle = {International Conference on Learning Representations (ICLR)},
   year      = {2026},
   url       = {https://hub.harborframework.com/datasets/orca-bench/ORCA-bench}
