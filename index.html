@@ -479,7 +479,7 @@ Chart.defaults.font.family = getComputedStyle(document.body).getPropertyValue('-
 Chart.defaults.font.size = 12;
 Chart.defaults.color = '#605c54';
 const GRID = '#e7e3da';
-const pct = v => v + '%';
+const pct = v => Math.round(v) + '%';
 
 // 1) Main: accuracy + depth grouped bars
 new Chart(document.getElementById('chMain'),{
@@ -525,7 +525,7 @@ let ablChart;
 function drawAbl(metric){
   const ct = MODELS.map(m=>codeTel[m][metric]);
   const to = MODELS.map(m=>telOnly[m][metric]);
-  const max = Math.max(...ct,...to)*1.15;
+  const max = Math.ceil(Math.max(...ct,...to)*1.15/10)*10;
   if(ablChart) ablChart.destroy();
   ablChart = new Chart(document.getElementById('chAbl'),{
     type:'bar',
