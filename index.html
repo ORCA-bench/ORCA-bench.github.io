@@ -217,8 +217,7 @@
 <span class="var">CACHE_DIR</span>=<span class="var">"$HOME/.cache/sre-snapshot-cache/$(</span><span class="cmd">docker</span> image inspect <span class="var">"$SNAPSHOT_IMAGE"</span> -f '{{.Id}}' | cut -d: -f2 | cut -c1-12<span class="var">)"</span>
 [ -z <span class="var">"$(ls -A "$CACHE_DIR" 2>/dev/null)"</span> ] &amp;&amp; { mkdir -p <span class="var">"$CACHE_DIR"</span>; <span class="var">CID</span>=<span class="var">$(</span><span class="cmd">docker</span> create <span class="var">"$SNAPSHOT_IMAGE"</span><span class="var">)</span>; <span class="cmd">docker</span> cp <span class="var">"$CID:/app/."</span> <span class="var">"$CACHE_DIR/"</span>; <span class="cmd">docker</span> rm <span class="var">"$CID"</span>; }
 
-<span class="cmt"># Bind-mount the cache (read-only) into every trial at the same host path</span>
-<span class="cmt"># (target=source, so the entrypoint can `cp -al` without translating it).</span>
+<span class="cmt"># Run the Harbor trials with the cache (read-only) bind-mounted</span>
 <span class="var">SNAPSHOT_CACHE_HOST_DIR</span>=<span class="var">"$CACHE_DIR"</span> <span class="cmd">harbor</span> run \
     --mounts-json <span class="var">"[{\"type\":\"bind\",\"source\":\"$CACHE_DIR\",\"target\":\"$CACHE_DIR\",\"read_only\":true}]"</span> \
     -d orca-bench/ORCA-bench</pre>
@@ -258,19 +257,19 @@
 
     <div class="card">
       <h3><span class="metric" data-def="acc">RCA Accuracy</span> vs. <span class="metric" data-def="depth">RCA Depth</span></h3>
-      <p class="cap">Mean &plusmn; 1 SE in percent. Even the strongest agents correctly identify the root cause in fewer than a third of incidents.</p>
+      <p class="cap">Mean &plusmn; 1 SE in percent. <span class="metric" data-def="depth">Depth</span> near 48% means the top agents typically confirm symptoms and make partial progress (a per-rubric score around 1.4 of 3) &mdash; but <span class="metric" data-def="acc">Accuracy</span> under a third shows they rarely pin down <em>every</em> plausible root cause.</p>
       <div class="chart-box"><canvas id="chMain"></canvas></div>
     </div>
 
     <div class="card">
       <h3>Accuracy falls off a cliff as tasks get harder</h3>
-      <p class="cap"><span class="metric" data-def="acc">RCA accuracy</span> stratified by prompt difficulty. Harder tasks have more ground-truth events and vaguer reports &mdash; the realistic regime.</p>
+      <p class="cap"><span class="metric" data-def="acc">RCA accuracy</span> stratified by prompt difficulty. Because Accuracy credits an agent only when it names <em>every</em> plausible fault, it collapses on Hard tasks (avg. 4.4 concurrent ground-truth events): the best agent drops from ~59% on Easy to 10% on Hard.</p>
       <div class="chart-box"><canvas id="chDiff"></canvas></div>
     </div>
 
     <div class="card">
       <h3><span class="metric" data-def="hall">Hallucination</span>: implausible root causes</h3>
-      <p class="cap">Share of incident reports asserting a root cause inconsistent with the evidence. Lower is better.</p>
+      <p class="cap">Share of non-empty reports naming a root cause that matches <em>none</em> of the plausible faults. It doesn't track capability: DeepSeek-V4-Pro scores low on accuracy yet hallucinates least (7%), while GLM-5 both scores low and hallucinates most (40%). Lower is better.</p>
       <div class="chart-box"><canvas id="chHall"></canvas></div>
     </div>
   </section>
