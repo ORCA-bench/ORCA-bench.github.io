@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ORCA-bench: How Ready Are Language Model Agents for Oncall?</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.0/dist/bundle/asciinema-player.css">
+<script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.0/dist/bundle/asciinema-player.min.js"></script>
 <style>
   :root{
     --bg:#fbfaf7;
@@ -104,8 +106,10 @@
   .card .cap{font-size:.86rem;color:var(--muted);margin:0 0 18px}
   .chart-box{position:relative;height:340px}
   .chart-box.tall{height:380px}
+  .cast-box{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .cast-box .ap-player{font-family:var(--mono)}
 
-  .toggle{display:inline-flex;gap:4px;background:var(--bg);border:1px solid var(--line);
+  .toggle{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--bg);border:1px solid var(--line);
     border-radius:8px;padding:4px;margin-bottom:16px}
   .toggle button{
     font-family:var(--sans);font-size:.82rem;border:none;background:transparent;
@@ -271,6 +275,23 @@
       <h3><span class="metric" data-def="hall">Hallucination</span>: implausible root causes</h3>
       <p class="cap">Share of non-empty reports naming a root cause that matches <em>none</em> of the plausible faults. It doesn't track capability: DeepSeek-V4-Pro scores low on accuracy yet hallucinates least (7%), while GLM-5 both scores low and hallucinates most (40%). Lower is better.</p>
       <div class="chart-box"><canvas id="chHall"></canvas></div>
+    </div>
+  </section>
+
+  <!-- Example trajectories -->
+  <section id="trajectories">
+    <h2>Watch the agents work</h2>
+    <p class="lede">Replay all five agents on the <em>same</em> Hard task (<a href="https://hub.harborframework.com/tasks/orca-bench/9bdcf561ef5292ea/latest"><code>orca-bench/9bdcf561ef5292ea</code></a>). The reported symptom is only <em>&ldquo;shoppers cannot use their cart&rdquo;</em> (ground truth: the <code>productCatalogFailure</code> fault flag). <strong>Claude Opus 4.7</strong> and <strong>GPT-5.5</strong> trace failed checkouts through <code>ProductCatalogService</code> to the enabled flag and nail it (GPT-5.4 judge 3/3); the other three miss the active root cause &mdash; e.g. <strong>GLM-5</strong> latches onto a persistent background issue.</p>
+    <div class="card">
+      <div class="toggle" id="castToggle">
+        <button class="active" data-model="Claude Opus 4.7">Claude Opus 4.7 &mdash; 3/3</button>
+        <button data-model="Claude Sonnet 4.6">Claude Sonnet 4.6 &mdash; 0/3</button>
+        <button data-model="GPT-5.5">GPT-5.5 &mdash; 3/3</button>
+        <button data-model="DeepSeek-V4-Pro">DeepSeek-V4-Pro &mdash; 0/3</button>
+        <button data-model="GLM-5">GLM-5 &mdash; 0/3</button>
+      </div>
+      <p class="cap" id="castCap"></p>
+      <div id="castPlayer" class="cast-box"></div>
     </div>
   </section>
 
@@ -525,6 +546,51 @@ document.querySelectorAll('#ablToggle button').forEach(b=>{
     drawAbl(b.dataset.m);
   };
 });
+
+// 4b) Trajectory replay (asciinema-player)
+const CASTS = {
+  "Claude Opus 4.7":{
+    src:"trajectories/opus-4.7-productCatalogFailure.cast",
+    cap:"Claude Opus 4.7 on <a href='https://hub.harborframework.com/tasks/orca-bench/9bdcf561ef5292ea/latest'><code>orca-bench/9bdcf561ef5292ea</code></a> &mdash; correctly identifies <code>productCatalogFailure</code> as the root cause (GPT-5.4 judge 3/3)."
+  },
+  "Claude Sonnet 4.6":{
+    src:"trajectories/claude-sonnet-4.6-productCatalogFailure.cast",
+    cap:"Claude Sonnet 4.6 on the same task &mdash; does not pin down <code>productCatalogFailure</code> as the root cause (GPT-5.4 judge 0/3)."
+  },
+  "GPT-5.5":{
+    src:"trajectories/gpt-5.5-productCatalogFailure.cast",
+    cap:"GPT-5.5 on the same task &mdash; also correctly identifies <code>productCatalogFailure</code> as the root cause (GPT-5.4 judge 3/3)."
+  },
+  "DeepSeek-V4-Pro":{
+    src:"trajectories/deepseek-v4-pro-productCatalogFailure.cast",
+    cap:"DeepSeek-V4-Pro on the same task &mdash; does not pin down <code>productCatalogFailure</code> as the root cause (GPT-5.4 judge 0/3)."
+  },
+  "GLM-5":{
+    src:"trajectories/glm-5-productCatalogFailure.cast",
+    cap:"GLM-5 on the same task &mdash; blames a background Playwright browser crash and misses the active root cause (GPT-5.4 judge 0/3)."
+  }
+};
+const castMount=document.getElementById('castPlayer');
+const castCap=document.getElementById('castCap');
+let castPlayer=null;
+function loadCast(model){
+  const c=CASTS[model];
+  if(castPlayer){ castPlayer.dispose(); castPlayer=null; }
+  castMount.innerHTML='';
+  castCap.innerHTML=c.cap;
+  castPlayer=AsciinemaPlayer.create(c.src,castMount,{
+    fit:"width",idleTimeLimit:2,speed:1.5,terminalFontSize:"small",
+    poster:"npt:0:03",theme:"asciinema"
+  });
+}
+document.querySelectorAll('#castToggle button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#castToggle button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    loadCast(b.dataset.model);
+  };
+});
+loadCast("Claude Opus 4.7");
 
 // 5) Table
 const cols=['depth','acc','hall','mech','inc','metrics','logs','traces'];
