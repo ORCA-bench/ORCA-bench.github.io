@@ -464,6 +464,14 @@ const diff = {
   "DeepSeek-V4-Pro":  {easy:24.7,med:14.9,hard:5.4},
   "GLM-5":            {easy:34.7,med:16.8,hard:1.1}
 };
+// 1 SE for accuracy by difficulty (from tab:full-difficulty-*)
+const diffErr = {
+  "Claude Opus 4.7":  {easy:3.0,med:2.4,hard:1.8},
+  "Claude Sonnet 4.6":{easy:2.9,med:2.4,hard:1.7},
+  "GPT-5.5":          {easy:2.9,med:2.4,hard:1.7},
+  "DeepSeek-V4-Pro":  {easy:2.5,med:2.0,hard:1.3},
+  "GLM-5":            {easy:2.8,med:2.1,hard:0.6}
+};
 
 // Telemetry-only, incident tasks (N=884)
 const telOnly = {
@@ -507,7 +515,7 @@ const errorBarsPlugin = {
       const meta=chart.getDatasetMeta(di);
       if(meta.hidden) return;
       ctx.save();
-      ctx.strokeStyle='rgba(28,27,25,.6)'; ctx.lineWidth=1.2;
+      ctx.strokeStyle=ds.errorBarColor||'rgba(28,27,25,.6)'; ctx.lineWidth=1.2;
       meta.data.forEach((el,i)=>{
         const e=ds.errorBars[i], v=ds.data[i];
         if(e==null||v==null||el.skip) return;
@@ -562,11 +570,12 @@ new Chart(document.getElementById('chDiff'),{
   data:{labels:['Easy','Medium','Hard'],
     datasets:MODELS.map((m,i)=>({
       label:m,data:[diff[m].easy,diff[m].med,diff[m].hard],
+      errorBars:[diffErr[m].easy,diffErr[m].med,diffErr[m].hard],errorBarColor:COLORS[i],
       borderColor:COLORS[i],backgroundColor:COLORS[i],tension:.3,
       borderWidth:2.4,pointRadius:4,pointHoverRadius:6
     }))},
   options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'%'}}},
+    plugins:{legend:{position:'top'},tooltip:{callbacks:{label:errLabel('y')}}},
     scales:{y:{beginAtZero:true,max:65,grid:{color:GRID},ticks:{callback:pct}},x:{grid:{display:false}}}}
 });
 
