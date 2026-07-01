@@ -264,7 +264,7 @@
   <!-- Headline result chart -->
   <section id="results">
     <h2>Headline results</h2>
-    <p class="lede"><span class="metric" data-def="acc">RCA accuracy</span> and the <span class="metric" data-def="depth">depth</span> of investigation across five frontier agents, with access to both code and telemetry (incident tasks, N=884).</p>
+    <p class="lede"><span class="metric" data-def="acc">RCA accuracy</span> and the <span class="metric" data-def="depth">depth</span> of investigation across five frontier models, with access to both code and telemetry (incident tasks, N=884). Each model is paired with the Terminus-2 agent (reasoning effort = medium, temperature = 1, max tokens = 16,384, max timeout = 1&nbsp;hr). Bars show mean &plusmn; 1 SE.</p>
 
     <div class="card">
       <h3><span class="metric" data-def="acc">RCA Accuracy</span> vs. <span class="metric" data-def="depth">RCA Depth</span></h3>
@@ -480,6 +480,62 @@ const codeTel = {
   "DeepSeek-V4-Pro":  {acc:15.0,depth:19.7,hall:7.2},
   "GLM-5":            {acc:17.6,depth:27.7,hall:40.2}
 };
+// 1 SE for the ablation series (code+telemetry from `rows`; telemetry-only from tab:full-rca-tel-only)
+const codeTelErr = {
+  "Claude Opus 4.7":  {acc:1.5,depth:1.1,hall:1.1},
+  "Claude Sonnet 4.6":{acc:1.6,depth:1.1,hall:1.2},
+  "GPT-5.5":          {acc:1.4,depth:1.1,hall:1.5},
+  "DeepSeek-V4-Pro":  {acc:1.2,depth:1.0,hall:0.9},
+  "GLM-5":            {acc:1.3,depth:1.0,hall:1.6}
+};
+const telOnlyErr = {
+  "Claude Opus 4.7":  {acc:1.3,depth:1.0,hall:1.6},
+  "Claude Sonnet 4.6":{acc:1.4,depth:0.9,hall:1.5},
+  "GPT-5.5":          {acc:0.9,depth:0.9,hall:1.7},
+  "DeepSeek-V4-Pro":  {acc:0.7,depth:0.6,hall:1.1},
+  "GLM-5":            {acc:0.8,depth:0.7,hall:1.5}
+};
+
+// ---- Error-bar plugin: draws +/-1 SE whiskers for any dataset with an `errorBars` array ----
+const errorBarsPlugin = {
+  id:'errorBars',
+  afterDatasetsDraw(chart){
+    const ctx=chart.ctx, horizontal=chart.options.indexAxis==='y';
+    const vScale=horizontal?chart.scales.x:chart.scales.y, cap=4;
+    chart.data.datasets.forEach((ds,di)=>{
+      if(!ds.errorBars) return;
+      const meta=chart.getDatasetMeta(di);
+      if(meta.hidden) return;
+      ctx.save();
+      ctx.strokeStyle='rgba(28,27,25,.6)'; ctx.lineWidth=1.2;
+      meta.data.forEach((el,i)=>{
+        const e=ds.errorBars[i], v=ds.data[i];
+        if(e==null||v==null||el.skip) return;
+        ctx.beginPath();
+        if(horizontal){
+          const y=el.y, lo=vScale.getPixelForValue(v-e), hi=vScale.getPixelForValue(v+e);
+          ctx.moveTo(lo,y); ctx.lineTo(hi,y);
+          ctx.moveTo(lo,y-cap); ctx.lineTo(lo,y+cap);
+          ctx.moveTo(hi,y-cap); ctx.lineTo(hi,y+cap);
+        }else{
+          const x=el.x, lo=vScale.getPixelForValue(v-e), hi=vScale.getPixelForValue(v+e);
+          ctx.moveTo(x,lo); ctx.lineTo(x,hi);
+          ctx.moveTo(x-cap,lo); ctx.lineTo(x+cap,lo);
+          ctx.moveTo(x-cap,hi); ctx.lineTo(x+cap,hi);
+        }
+        ctx.stroke();
+      });
+      ctx.restore();
+    });
+  }
+};
+Chart.register(errorBarsPlugin);
+// tooltip label incl. +/-1 SE when the dataset carries error bars
+const errLabel = axis => c => {
+  const e=c.dataset.errorBars && c.dataset.errorBars[c.dataIndex];
+  const base=(c.dataset.label?c.dataset.label+': ':'')+c.parsed[axis]+'%';
+  return e!=null ? base+' ± '+e+'%' : base;
+};
 
 // ---- Chart.js shared config ----
 Chart.defaults.font.family = getComputedStyle(document.body).getPropertyValue('--sans');
@@ -492,11 +548,11 @@ const pct = v => Math.round(v) + '%';
 new Chart(document.getElementById('chMain'),{
   type:'bar',
   data:{labels:MODELS,datasets:[
-    {label:'RCA Accuracy',data:rows.map(r=>r.acc),backgroundColor:'#9a342d',borderRadius:4},
-    {label:'RCA Depth',data:rows.map(r=>r.depth),backgroundColor:'#d8b3ae',borderRadius:4}
+    {label:'RCA Accuracy',data:rows.map(r=>r.acc),errorBars:rows.map(r=>r.ae),backgroundColor:'#9a342d',borderRadius:4},
+    {label:'RCA Depth',data:rows.map(r=>r.depth),errorBars:rows.map(r=>r.de),backgroundColor:'#d8b3ae',borderRadius:4}
   ]},
   options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'%'}}},
+    plugins:{legend:{position:'top'},tooltip:{callbacks:{label:errLabel('y')}}},
     scales:{y:{beginAtZero:true,max:60,grid:{color:GRID},ticks:{callback:pct}},x:{grid:{display:false}}}}
 });
 
@@ -519,11 +575,11 @@ const hallSorted = [...rows].sort((a,b)=>a.hall-b.hall);
 new Chart(document.getElementById('chHall'),{
   type:'bar',
   data:{labels:hallSorted.map(r=>r.m),datasets:[
-    {label:'% Hallucination',data:hallSorted.map(r=>r.hall),
+    {label:'% Hallucination',data:hallSorted.map(r=>r.hall),errorBars:hallSorted.map(r=>r.he),
      backgroundColor:hallSorted.map(r=>r.hall>30?'#9a342d':r.hall>15?'#b9892f':'#4a7c59'),borderRadius:4}
   ]},
   options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.x+'%'}}},
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:errLabel('x')}}},
     scales:{x:{beginAtZero:true,max:50,grid:{color:GRID},ticks:{callback:pct}},y:{grid:{display:false}}}}
 });
 
@@ -532,16 +588,18 @@ let ablChart;
 function drawAbl(metric){
   const ct = MODELS.map(m=>codeTel[m][metric]);
   const to = MODELS.map(m=>telOnly[m][metric]);
-  const max = Math.ceil(Math.max(...ct,...to)*1.15/10)*10;
+  const ctErr = MODELS.map(m=>codeTelErr[m][metric]);
+  const toErr = MODELS.map(m=>telOnlyErr[m][metric]);
+  const max = Math.ceil(Math.max(...ct.map((v,i)=>v+ctErr[i]),...to.map((v,i)=>v+toErr[i]))*1.15/10)*10;
   if(ablChart) ablChart.destroy();
   ablChart = new Chart(document.getElementById('chAbl'),{
     type:'bar',
     data:{labels:MODELS,datasets:[
-      {label:'Code + Telemetry',data:ct,backgroundColor:'#2f5d7c',borderRadius:4},
-      {label:'Telemetry only',data:to,backgroundColor:'#bcd0dd',borderRadius:4}
+      {label:'Code + Telemetry',data:ct,errorBars:ctErr,backgroundColor:'#2f5d7c',borderRadius:4},
+      {label:'Telemetry only',data:to,errorBars:toErr,backgroundColor:'#bcd0dd',borderRadius:4}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'%'}}},
+      plugins:{legend:{position:'top'},tooltip:{callbacks:{label:errLabel('y')}}},
       scales:{y:{beginAtZero:true,max:max,grid:{color:GRID},ticks:{callback:pct}},x:{grid:{display:false}}}}
   });
 }
